@@ -1,0 +1,86 @@
+version: "3"
+
+volumes:
+  samples-data:
+
+services:
+  postgres:
+    image: postgres:12.3
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: samples
+      POSTGRES_PASSWORD: samples
+    volumes:
+      - samples-data:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:18.0.0
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 5050
+#      KC_HOSTNAME: keycloak
+    command: [ "start-dev", "--import-realm" ]
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./keycloak/samples-realm.json:/opt/keycloak/data/import/samples-realm.json:z
+
+  samples:
+    image: com.example/samples:latest
+    ports:
+      - "8080:8080"
+      - "7777:7777"
+    environment:
+      WLP_DEBUG_ADDRESS: 7777
+      WLP_DEBUG_REMOTE: "y"
+      WLP_DEBUG_SUSPEND: "n"
+      JAEGER_AGENT_HOST: jaeger
+      JAEGER_AGENT_PORT: 6831
+      JAEGER_SAMPLER_TYPE: const
+      JAEGER_SAMPLER_PARAM: 1
+    volumes:
+      - ./openliberty-dropins/:/opt/ol/wlp/usr/servers/defaultServer/dropins/
+#    healthcheck:
+#      test: curl --fail http://localhost:8080/health || exit 1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+      - keycloak
+
+#  jaeger:
+#    image: docker.io/jaegertracing/all-in-one:1.31
+#    ports:
+#      - "5775:5775/udp"
+#      - "6831:6831/udp"
+#      - "6832:6832/udp"
+#      - "5778:5778"
+#      - "16686:16686"
+#      - "14268:14268"
+#    depends_on:
+#      - samples
+#
+#  prometheus:
+#    image: docker.io/prom/prometheus:v2.34.0
+#    user: root
+#    volumes:
+#      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml
+#    ports:
+#      - "9090:9090"
+#    depends_on:
+#      - samples
+#
+#  grafana:
+#    image: docker.io/grafana/grafana-oss:8.4.4
+#    ports:
+#      - "3000:3000"
+#    environment:
+#      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+#    volumes:
+#      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+#      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+#    depends_on:
+#      - prometheus
